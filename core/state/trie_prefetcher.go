@@ -51,6 +51,11 @@ type triePrefetcher struct {
 	storageWasteMeter metrics.Meter
 }
 
+// Brian Add: public newTriePrefetcher
+func NewTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
+	return newTriePrefetcher(db, root, namespace)
+}
+
 func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
@@ -154,6 +159,11 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
+}
+
+// Brian Add
+func (p *triePrefetcher) Prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) {
+	p.prefetch(owner, root, addr, keys)
 }
 
 // trie returns the trie matching the root hash, or nil if the prefetcher doesn't

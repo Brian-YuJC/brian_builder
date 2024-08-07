@@ -143,6 +143,16 @@ type StateDB struct {
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
 }
 
+// Brian Add
+func (s *StateDB) GetDB() Database {
+	return s.db
+}
+
+// Brian Add
+func (s *StateDB) GetOriginalRoot() common.Hash {
+	return s.originalRoot
+}
+
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)

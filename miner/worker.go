@@ -1781,7 +1781,7 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 		result: make(chan *newPayloadResult, 1),
 	}
 	select {
-	case w.getWorkCh <- req:
+	case w.getWorkCh <- req: //Brian Add: 新建一个管道，异步向worker请求(MainLoop:req := <-w.getWorkCh, req为指针)一个新块
 		return <-req.result
 	case <-w.exitCh:
 		return &newPayloadResult{err: errors.New("miner closed")}
