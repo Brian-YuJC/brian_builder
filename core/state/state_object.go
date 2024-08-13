@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/prefetch"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
@@ -164,6 +165,7 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 	// If we have a dirty value for this state entry, return it
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
+		prefetch.LOG.Write("Dirty", "") //Brian Add
 		return value
 	}
 	// Otherwise return the entry's original value
@@ -174,9 +176,11 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	// If we have a pending write or clean cached, return that
 	if value, pending := s.pendingStorage[key]; pending {
+		prefetch.LOG.Write("Pending", "") //Brian Add
 		return value
 	}
 	if value, cached := s.originStorage[key]; cached {
+		prefetch.LOG.Write("Origin", "") //Brian Add
 		return value
 	}
 	// If the object was destructed in *this* block (and potentially resurrected),
@@ -186,6 +190,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	//      have been handles via pendingStorage above.
 	//   2) we don't have new values, and can deliver empty response back
 	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
+		prefetch.LOG.Write("Destruct", "") //Brian Add
 		return common.Hash{}
 	}
 	// If no live objects are available, attempt to use snapshots
@@ -206,6 +211,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 				s.db.setError(err)
 			}
 			value.SetBytes(content)
+			prefetch.LOG.Write("Snapshot", "") //Brian Add
 		}
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
@@ -227,6 +233,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		value.SetBytes(val)
 	}
 	s.originStorage[key] = value
+	prefetch.LOG.Write("Trie", "") //Brian Add
 	return value
 }
 

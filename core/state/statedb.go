@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/prefetch"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
@@ -354,10 +355,18 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves a value from the given account's storage trie.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+	//prefetch.LOG.Write("   getStateObject_start", time.Now()) //Brian Add
 	stateObject := s.getStateObject(addr)
+	//prefetch.LOG.Write("   getStateObject_end", time.Now()) //Brian Add
+
 	if stateObject != nil {
+		prefetch.LOG.Write("   State", "getStateObject success")     //Brian Add
+		prefetch.LOG.Write("stateObject.GetState_start", time.Now()) //Brian Add
+		//defer prefetch.LOG.Write("stateObject.GetState_end", time.Now()) //Brian Add
 		return stateObject.GetState(hash)
 	}
+	//prefetch.LOG.Write("   State", "getStateObject fail") //Brian Add
+
 	return common.Hash{}
 }
 

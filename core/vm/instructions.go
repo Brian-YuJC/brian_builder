@@ -18,11 +18,13 @@ package vm
 
 import (
 	"math"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/prefetch"
 	"github.com/holiman/uint256"
 )
 
@@ -512,11 +514,31 @@ func opMstore8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 }
 
 func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+
+	prefetch.LOCK = false                 //Brian Add
+	start_time := time.Now()              //Brian Add
+	prefetch.LOG.Write("SLOAD_start", "") //Brian Add
+
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
+	prefetch.TOUCH_ADDR_CH <- prefetch.TouchLog{Address: scope.Contract.Address(), Key: hash, WhichTx: prefetch.CURRENT_TX} //Brian Add
+	//fmt.Fprintln(os.Stderr, scope.Contract.Address(), loc) //Brian Add
+	//fmt.Fprintln(os.Stderr, scope.Contract.Address(), hash) //Brian Add
+	//fmt.Fprintln(os.Stderr, scope.Contract.Address(), loc.Bytes32()) //Brian Add
+	//prefetch.LOG.Write(" GetState_start", time.Now()) //Brian Add
 	val := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
+	//prefetch.LOG.Write(" GetState_end", time.Now()) //Brian Add
 	loc.SetBytes(val.Bytes())
+
+	prefetch.LOG.Write("SLOAD_end", time.Since(start_time).Nanoseconds()) //Brian Add
+	prefetch.LOCK = true                                                  //Brian Add
+
 	return nil, nil
+}
+
+// Brian Add
+func OpSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	return opSload(pc, interpreter, scope)
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
