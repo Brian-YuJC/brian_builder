@@ -179,7 +179,7 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
-	if db.triedb.IsVerkle() {
+	if db.triedb.IsVerkle() { //Brian Add verkle triek可以优化proof 详见：https://math.mit.edu/research/highschool/primes/materials/2018/Kuszmaul.pdf
 		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)

@@ -521,7 +521,6 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
-	prefetch.TOUCH_ADDR_CH <- prefetch.TouchLog{Address: scope.Contract.Address(), Key: hash, WhichTx: prefetch.CURRENT_TX} //Brian Add
 	//fmt.Fprintln(os.Stderr, scope.Contract.Address(), loc) //Brian Add
 	//fmt.Fprintln(os.Stderr, scope.Contract.Address(), hash) //Brian Add
 	//fmt.Fprintln(os.Stderr, scope.Contract.Address(), loc.Bytes32()) //Brian Add
@@ -530,8 +529,9 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	//prefetch.LOG.Write(" GetState_end", time.Now()) //Brian Add
 	loc.SetBytes(val.Bytes())
 
-	prefetch.LOG.Write("SLOAD_end", time.Since(start_time).Nanoseconds()) //Brian Add
-	prefetch.LOCK = true                                                  //Brian Add
+	prefetch.TOUCH_ADDR_CH <- prefetch.TouchLog{Address: scope.Contract.Address(), Key: hash, WhichTx: prefetch.CURRENT_TX, Value: val} //Brian Add
+	prefetch.LOG.Write("SLOAD_end", time.Since(start_time).Nanoseconds())                                                               //Brian Add
+	prefetch.LOCK = true                                                                                                                //Brian Add
 
 	return nil, nil
 }

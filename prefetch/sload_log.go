@@ -46,6 +46,7 @@ func PrintLogLinear(log Log) {
 	}
 }
 
+// 用于确定主线程
 func getGoroutineID() int {
 	var buf [64]byte
 	n := runtime.Stack(buf[:], false)
@@ -55,10 +56,12 @@ func getGoroutineID() int {
 }
 
 // using to get touch address
+// TODO 这里获取Address key和上面获取SLOAD 调用log一样写的规范一点，可以随时开关通道
 type TouchLog struct {
 	WhichTx common.Hash
 	Address common.Address
 	Key     common.Hash
+	Value   common.Hash
 }
 
 var TOUCH_ADDR_CH chan TouchLog
