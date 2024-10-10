@@ -232,6 +232,7 @@ func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address]
 	for from, accTxs := range txs {
 		wrapped, err := newTxWithMinerFee(accTxs[0], from, baseFeeUint)
 		if err != nil {
+			//fmt.Println(err) // Brian Add
 			delete(txs, from)
 			continue
 		}
@@ -239,6 +240,7 @@ func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address]
 		txs[from] = accTxs[1:]
 	}
 	heap.Init(&heads)
+	//fmt.Println(heads.Len()) //Brian Add
 
 	// Assemble and return the transaction set
 	return &transactionsByPriceAndNonce{

@@ -377,6 +377,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {
+		//fmt.Println("preCheck err:", err) // Brian Add ：这里报了Nonce Error
 		return nil, err
 	}
 

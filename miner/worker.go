@@ -1169,6 +1169,7 @@ type generateParams struct {
 func doPrepareHeader(genParams *generateParams, chain *core.BlockChain, config *Config, chainConfig *params.ChainConfig, extra []byte, engine consensus.Engine) (*types.Header, *types.Header, error) {
 	// Find the parent block for sealing task
 	parent := chain.CurrentBlock()
+	//fmt.Println(parent.Number) //Brian Add
 	if genParams.parentHash != (common.Hash{}) {
 		block := chain.GetBlockByHash(genParams.parentHash)
 		if block == nil {
@@ -1191,6 +1192,7 @@ func doPrepareHeader(genParams *generateParams, chain *core.BlockChain, config *
 	if gasTarget == 0 {
 		gasTarget = config.GasCeil
 	}
+
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
@@ -1244,6 +1246,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	defer w.mu.RUnlock()
 
 	header, parent, err := doPrepareHeader(genParams, w.chain, w.config, w.chainConfig, w.extra, w.engine)
+	//fmt.Println(header, parent) // Brian Add
+	// fmt.Println(header.Number.Uint64()) //Brian Add
 	if err != nil {
 		return nil, err
 	}
@@ -1393,6 +1397,7 @@ func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *enviro
 	}
 	if env.header.BaseFee != nil {
 		filter.BaseFee = uint256.MustFromBig(env.header.BaseFee)
+		//fmt.Println("filter.BaseFee", filter.BaseFee) //Brian Add
 	}
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
@@ -1407,6 +1412,7 @@ func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *enviro
 		}
 	}
 
+	//Brian Add:每个bundle模拟执行一遍，获取MEVGasPrice
 	bundlesToConsider, sbundlesToConsider, err := w.getSimulatedBundles(env)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -1473,6 +1479,7 @@ func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *enviro
 	default:
 		// For default greedy builder, set algorithm configuration to default values,
 		// except DropRevertibleTxOnErr which is passed in from worker config
+		//fmt.Println("In ALGO_GREEDY") //Brian Add
 		algoConf := &algorithmConfig{
 			DropRevertibleTxOnErr:  w.config.DiscardRevertibleTxOnErr,
 			EnforceProfit:          defaultAlgorithmConfig.EnforceProfit,
@@ -1803,6 +1810,7 @@ func (w *worker) generateFlashbotsBundle(env *environment, bundles []types.MevBu
 		return nil, simulatedBundle{}, nil, 0, nil, err
 	}
 
+	//Brian Add: 按MevGasPrice从大到小排序
 	sort.SliceStable(simulatedBundles, func(i, j int) bool {
 		return simulatedBundles[j].MevGasPrice.Cmp(simulatedBundles[i].MevGasPrice) < 0
 	})
@@ -1835,6 +1843,7 @@ func (w *worker) mergeBundles(env *environment, bundles []simulatedBundle, pendi
 		floorGasPrice := new(uint256.Int).Mul(bundle.MevGasPrice, uint256.NewInt(99))
 		floorGasPrice = floorGasPrice.Div(floorGasPrice, uint256.NewInt(100))
 
+		//Brian Add: 和simulateBundles里的computeBundleGas不同点是这里的currentState状态是会按执行顺序动态改变的
 		simmed, err := w.computeBundleGas(env, bundle.OriginalBundle, currentState, gasPool, pendingTxs, len(finalBundle))
 		if err != nil || simmed.MevGasPrice.Cmp(floorGasPrice) <= 0 {
 			currentState = prevState
@@ -1877,7 +1886,9 @@ func (w *worker) simulateBundles(env *environment, bundles []types.MevBundle, sb
 
 	var wg sync.WaitGroup
 	for i, bundle := range bundles {
+		//fmt.Println("Doing bundle:", i) // Brian Add
 		if simmed, ok := simCache.GetSimulatedBundle(bundle.Hash); ok {
+			//fmt.Println("Bundle beeing caching:", i) // Brian Add
 			simResult[i] = simmed
 			continue
 		}
@@ -1892,6 +1903,7 @@ func (w *worker) simulateBundles(env *environment, bundles []types.MevBundle, sb
 			}
 
 			if len(bundle.Txs) == 0 {
+				//fmt.Println("No tx in Bundle", idx) // Brian Add
 				return
 			}
 			gasPool := new(core.GasPool).AddGas(env.header.GasLimit)
@@ -1906,7 +1918,8 @@ func (w *worker) simulateBundles(env *environment, bundles []types.MevBundle, sb
 					simulationRevertedMeter.Mark(1)
 					failedBundleSimulationTimer.UpdateSince(start)
 				}
-
+				//Brian Add:这里可能由于数据集的tx的Nonce不同会报错, 所以可能需要根据当前状态批量更改数据集的Nonce
+				//fmt.Println(err) //Brian Add
 				log.Trace("Error computing gas for a bundle", "error", err)
 				return
 			}
@@ -1916,6 +1929,7 @@ func (w *worker) simulateBundles(env *environment, bundles []types.MevBundle, sb
 				simulationCommittedMeter.Mark(1)
 				successfulBundleSimulationTimer.UpdateSince(start)
 			}
+			//fmt.Println("Finish", idx) //Brian add
 		}(i, bundle, env.state.Copy())
 	}
 
@@ -2013,6 +2027,10 @@ func (w *worker) simulateBundles(env *environment, bundles []types.MevBundle, sb
 	if metrics.EnabledBuilder {
 		blockBundleSimulationTimer.Update(time.Since(start))
 	}
+	//Brian Add:------------------------
+	fmt.Println("Simulated bundles", "block", env.header.Number, "allBundles", len(bundles), "okBundles", len(simulatedBundles),
+		"allSbundles", len(sbundles), "okSbundles", len(simulatedSbundle), "time", time.Since(start))
+	//Brian Add:------------------------
 	return simulatedBundles, simulatedSbundle, nil
 }
 
@@ -2063,6 +2081,7 @@ func (w *worker) computeBundleGas(
 		}
 		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, gasPool, state, env.header, tx, &tempGasUsed, config, nil)
 		if err != nil {
+			//fmt.Println("ApplyTransaction err:", err) // Brian Add 就是这里报Nonce Error
 			return simulatedBundle{}, err
 		}
 		if receipt.Status == types.ReceiptStatusFailed && !containsHash(bundle.RevertingTxHashes, receipt.TxHash) {

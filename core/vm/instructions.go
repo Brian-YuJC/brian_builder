@@ -529,9 +529,11 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	//prefetch.LOG.Write(" GetState_end", time.Now()) //Brian Add
 	loc.SetBytes(val.Bytes())
 
-	prefetch.TOUCH_ADDR_CH <- prefetch.TouchLog{Address: scope.Contract.Address(), Key: hash, WhichTx: prefetch.CURRENT_TX, Value: val} //Brian Add
-	prefetch.LOG.Write("SLOAD_end", time.Since(start_time).Nanoseconds())                                                               //Brian Add
-	prefetch.LOCK = true                                                                                                                //Brian Add
+	if prefetch.DO_TOUCH_ADDR_LOG { //Brian Add
+		prefetch.TOUCH_ADDR_CH <- prefetch.TouchLog{Address: scope.Contract.Address(), Key: hash, WhichTx: prefetch.CURRENT_TX, Value: val} //Brian Add
+	}
+	prefetch.LOG.Write("SLOAD_end", time.Since(start_time).Nanoseconds()) //Brian Add
+	prefetch.LOCK = true                                                  //Brian Add
 
 	return nil, nil
 }

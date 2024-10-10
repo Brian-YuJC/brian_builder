@@ -2,6 +2,7 @@ package prefetch
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +34,8 @@ func (log *Log) Init() {
 	DO_LOG = true
 }
 
-var DO_LOG = false //是否需要log，不需要就不记录
+var DO_LOG = false            //是否需要log，不需要就不记录
+var DO_TOUCH_ADDR_LOG = false //是否需要打印sload touch address 的log
 var LOCK = true
 var LOG = Log{List: make([]LogData, 0), Map: make(map[string][]interface{})}
 
@@ -66,3 +68,17 @@ type TouchLog struct {
 
 var TOUCH_ADDR_CH chan TouchLog
 var CURRENT_TX common.Hash
+
+var DO_INVOKE_TRACE = false
+
+// 跟踪合约调用情况
+func InvokeTrace(data ...interface{}) {
+	if !DO_INVOKE_TRACE {
+		return
+	}
+	for _, v := range data {
+		fmt.Fprint(os.Stderr, v)
+		fmt.Fprint(os.Stderr, " ")
+	}
+	fmt.Fprint(os.Stderr, "\n")
+}

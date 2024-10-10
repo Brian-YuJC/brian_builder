@@ -703,7 +703,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	journalProgress(ctx.batch, nil, stats)
 	if err := ctx.batch.Write(); err != nil {
 		log.Error("Failed to flush batch", "err", err)
-
+		//fmt.Println(err) //Brian Add
 		abort = <-dl.genAbort
 		abort <- stats
 		return

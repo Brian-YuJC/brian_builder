@@ -50,19 +50,20 @@ func (b *greedyBuilder) mergeOrdersIntoEnvDiff(
 		usedSbundles []types.UsedSBundle
 	)
 	for {
-		order := orders.Peek()
+		order := orders.Peek() // Brian Add: 从堆中取出收益最高的（？）
 		if order == nil {
 			break
 		}
 
-		if laxyTx := order.Tx(); laxyTx != nil {
+		if laxyTx := order.Tx(); laxyTx != nil { //Brian Add: 如果是txpool中的普通pendingTx
+			//fmt.Println("is Tx") // Brian Add
 			tx := laxyTx.Resolve()
 			if tx == nil {
 				log.Trace("Ignoring evicted transaction", "hash", laxyTx.Hash)
 				orders.Pop()
 				continue
 			}
-			receipt, skip, err := envDiff.commitTx(tx, b.chainData)
+			receipt, skip, err := envDiff.commitTx(tx, b.chainData) //
 			switch skip {
 			case shiftTx:
 				orders.Shift()
@@ -72,6 +73,10 @@ func (b *greedyBuilder) mergeOrdersIntoEnvDiff(
 
 			if err != nil {
 				log.Trace("could not apply tx", "hash", tx.Hash(), "err", err)
+				// fmt.Println(err)                             //Brian Add (如果爆Gas会报gas limit reached，这里有没有必要一报错就break呢？)
+				// if errors.Is(err, core.ErrGasLimitReached) { // Brian Add: 尝试一下一爆gas就掐掉（其实可能存在后续tx能刚好不爆gas的情况）
+				// 	break
+				// }
 				continue
 			}
 			effGapPrice, err := tx.EffectiveGasTip(envDiff.baseEnvironment.header.BaseFee)
@@ -111,6 +116,7 @@ func (b *greedyBuilder) mergeOrdersIntoEnvDiff(
 }
 
 func (b *greedyBuilder) buildBlock(simBundles []types.SimulatedBundle, simSBundles []*types.SimSBundle, transactions map[common.Address][]*txpool.LazyTransaction) (*environment, []types.SimulatedBundle, []types.UsedSBundle) {
+	//fmt.Println("tx size:", len(transactions)) //Brian Add
 	orders := newTransactionsByPriceAndNonce(b.inputEnvironment.signer, transactions, simBundles, simSBundles, b.inputEnvironment.header.BaseFee)
 	envDiff := newEnvironmentDiff(b.inputEnvironment.copy())
 	b.inputEnvironment.state.StopPrefetcher()

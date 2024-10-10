@@ -185,7 +185,7 @@ func (db *Database) node(hash common.Hash) ([]byte, error) {
 	if hash == (common.Hash{}) {
 		return nil, errors.New("not found")
 	}
-	// Retrieve the node from the clean cache if available
+	// Retrieve the node from the clean cache if available //Brian Add ⭐️
 	if db.cleans != nil {
 		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
 			memcacheCleanHitMeter.Mark(1)
@@ -193,7 +193,7 @@ func (db *Database) node(hash common.Hash) ([]byte, error) {
 			return enc, nil
 		}
 	}
-	// Retrieve the node from the dirty cache if available.
+	// Retrieve the node from the dirty cache if available. //Brian Add ⭐️
 	db.lock.RLock()
 	dirty := db.dirties[hash]
 	db.lock.RUnlock()
@@ -208,11 +208,11 @@ func (db *Database) node(hash common.Hash) ([]byte, error) {
 	}
 	memcacheDirtyMissMeter.Mark(1)
 
-	// Content unavailable in memory, attempt to retrieve from disk
+	// Content unavailable in memory, attempt to retrieve from disk //Brian Add ⭐️
 	enc := rawdb.ReadLegacyTrieNode(db.diskdb, hash)
 	if len(enc) != 0 {
 		if db.cleans != nil {
-			db.cleans.Set(hash[:], enc)
+			db.cleans.Set(hash[:], enc) //Brian Add ⭐️
 			memcacheCleanMissMeter.Mark(1)
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
 		}

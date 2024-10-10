@@ -188,10 +188,12 @@ func NewCancunSigner(chainId *big.Int) Signer {
 }
 
 func (s cancunSigner) Sender(tx *Transaction) (common.Address, error) {
+	//fmt.Println("cancun") //Brian Add
 	if tx.Type() != BlobTxType {
 		return s.londonSigner.Sender(tx)
 	}
 	V, R, S := tx.RawSignatureValues()
+	//fmt.Println("V, R, S", V, R, S) // Brian Add
 	// Blob txs are defined to use 0 and 1 as their recovery
 	// id, add 27 to become equivalent to unprotected Homestead signatures.
 	V = new(big.Int).Add(V, big.NewInt(27))
@@ -256,6 +258,7 @@ func NewLondonSigner(chainId *big.Int) Signer {
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
+	//fmt.Println("london") //Brian Add
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
@@ -328,6 +331,7 @@ func (s eip2930Signer) Equal(s2 Signer) bool {
 }
 
 func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
+	//fmt.Println("2930") //Brian Add
 	V, R, S := tx.RawSignatureValues()
 	switch tx.Type() {
 	case LegacyTxType:
@@ -419,6 +423,7 @@ func (s EIP155Signer) Equal(s2 Signer) bool {
 var big8 = big.NewInt(8)
 
 func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
+	//fmt.Println("155") //Brian Add
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -482,6 +487,7 @@ func (hs HomesteadSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v 
 }
 
 func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
+	//fmt.Println("legacy") //Brian Add
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -503,6 +509,7 @@ func (s FrontierSigner) Equal(s2 Signer) bool {
 }
 
 func (fs FrontierSigner) Sender(tx *Transaction) (common.Address, error) {
+	//fmt.Println("frontier") //Brian Add
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -544,6 +551,7 @@ func decodeSignature(sig []byte) (r, s, v *big.Int) {
 }
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (common.Address, error) {
+	//fmt.Println("V, R, S", Vb, R, S) // Brian Add
 	if Vb.BitLen() > 8 {
 		return common.Address{}, ErrInvalidSig
 	}

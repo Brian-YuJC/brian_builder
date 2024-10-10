@@ -538,6 +538,7 @@ func (p *TxPool) AddMevBundle(txs []*types.Transaction, blockNumber *big.Int, re
 		RevertingTxHashes: revertingTxHashes,
 		Hash:              bundleHash,
 	})
+	//fmt.Println(len(p.mevBundles)) //Brian Add
 	return nil
 }
 
@@ -572,6 +573,7 @@ func (p *TxPool) MevBundles(blockNumber *big.Int, blockTimestamp uint64) ([]type
 		}
 
 		// Roll over future bundles
+		//Brian Add:如果bundle没设置过期时间，bundle_block_num必须等于下一个块号就才能被提取(?) // return the ones which are in time
 		if (bundle.MinTimestamp != 0 && blockTimestamp < bundle.MinTimestamp) || blockNumber.Cmp(bundle.BlockNumber) < 0 {
 			bundles = append(bundles, bundle)
 			continue

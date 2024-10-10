@@ -262,6 +262,12 @@ type BlockChain struct {
 	vmConfig   vm.Config
 }
 
+// Brian Add
+// blockchain chainConfig Getter
+func (bc *BlockChain) GetChainConfig() *params.ChainConfig {
+	return bc.chainConfig
+}
+
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
 // and Processor.
@@ -276,6 +282,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
 	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
+	//fmt.Println("signer", chainConfig.CancunTime, chainConfig.LondonBlock, chainConfig.BerlinBlock, chainConfig.EIP155Block) //Brian Add
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -448,7 +455,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
 			AsyncBuild: !bc.cacheConfig.SnapshotWait,
 		}
-		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
+		//-------Brian Add Have Problem------------------------------------------------------------------
+		//变成path以后好像会启动一个什么snapshot的异步加载器导致等待很久
+		bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
+		//------------------- Brian Add Have Problem---------------------------------------------------
 	}
 
 	// Start future block processor.
@@ -1393,7 +1403,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		_, nodes, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
 		limit          = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
 	)
-	if nodes > limit || imgs > 4*1024*1024 {
+	if nodes > limit || imgs > 4*1024*1024 { //Brian Add
 		bc.triedb.Cap(limit - ethdb.IdealBatchSize)
 	}
 	// Find the next state trie we need to commit

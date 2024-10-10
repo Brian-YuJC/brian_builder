@@ -178,7 +178,7 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 		}
 		return value, n, didResolve, err
 	case hashNode:
-		child, err := t.resolveAndTrack(n, key[:pos])
+		child, err := t.resolveAndTrack(n, key[:pos]) //Brian Add ⭐️ Need to get from low-level db
 		if err != nil {
 			return nil, n, true, err
 		}
