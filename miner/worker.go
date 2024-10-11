@@ -1538,6 +1538,7 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	params.coinbase = w.coinbase
 
 	work, err := w.prepareWork(params)
+	//work.state.StopPrefetcher() //Brian Add :尝试关闭statedb的prefetcher看看运行时间有什么不同
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -2081,7 +2082,7 @@ func (w *worker) computeBundleGas(
 		}
 		receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, gasPool, state, env.header, tx, &tempGasUsed, config, nil)
 		if err != nil {
-			//fmt.Println("ApplyTransaction err:", err) // Brian Add 就是这里报Nonce Error
+			//fmt.Println("ApplyTransaction err:", err) // Brian Add 就是这里报Nonce Error 或者报insufficient funds余额不足
 			return simulatedBundle{}, err
 		}
 		if receipt.Status == types.ReceiptStatusFailed && !containsHash(bundle.RevertingTxHashes, receipt.TxHash) {

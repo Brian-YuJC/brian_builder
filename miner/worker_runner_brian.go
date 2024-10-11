@@ -102,6 +102,7 @@ func RunBuilder(db ethdb.Database, bc *core.BlockChain, bundles []types.MevBundl
 	fmt.Println("New block hash:", res.block.Hash().Hex())
 	//fmt.Println(w.chain.CurrentBlock().Number)
 
+	// 测试：fillTransactionsAlgoWorker
 	// env, err := w.prepareWork(&generateParams{gasLimit: 30_000_000}) //新建simulate所需运行环境
 	// check(err)
 	// blockBundles, _, _, mempoolTxHashes, err := w.fillTransactionsAlgoWorker(nil, env)
@@ -109,6 +110,7 @@ func RunBuilder(db ethdb.Database, bc *core.BlockChain, bundles []types.MevBundl
 	// fmt.Println("blockBundles size:", len(blockBundles))
 	// fmt.Println("mempoolTxHashes size:", len(mempoolTxHashes))
 
+	// 测试：simulateBundles
 	// pending := w.eth.TxPool().Pending(txpool.PendingFilter{ //提取池中交易
 	// 	MinTip: uint256.MustFromBig(big.NewInt(0)),
 	// })

@@ -68,6 +68,11 @@ type Transaction struct {
 	from atomic.Value
 }
 
+// Brian Add ：inner Getter
+func (tx Transaction) GetInner() TxData {
+	return tx.inner
+}
+
 // NewTx creates a new transaction.
 func NewTx(inner TxData) *Transaction {
 	tx := new(Transaction)
