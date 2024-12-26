@@ -104,6 +104,12 @@ type environment struct {
 	blobs    int
 }
 
+// Brian Add:
+// environment stateDB getter
+func (env *environment) GetState() *state.StateDB {
+	return env.state
+}
+
 // copy creates a deep copy of environment.
 func (env *environment) copy() *environment {
 	cpy := &environment{
@@ -256,6 +262,26 @@ type worker struct {
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
+}
+
+// Brian Add: public worker
+type WorkerPtr struct {
+	Ptr *worker
+}
+
+// Brian Add: pubilc eth
+func (w *worker) GetEth() Backend {
+	return w.eth
+}
+
+// Brian Add: flashbot getter
+func (w *worker) GetFlashbots() *flashbotsData {
+	return w.flashbots
+}
+
+// Brian Add: tip Getter
+func (w *worker) GetTip() *uint256.Int {
+	return w.tip
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, flashbots *flashbotsData) *worker {
@@ -594,6 +620,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 // the received event. It can support two modes: automatically generate task and
 // submit it or return task according to given parameters for various proposes.
 func (w *worker) mainLoop() {
+	//fmt.Println("Start mainLoop") //Brian Add
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
@@ -1246,6 +1273,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	defer w.mu.RUnlock()
 
 	header, parent, err := doPrepareHeader(genParams, w.chain, w.config, w.chainConfig, w.extra, w.engine)
+	// header.BaseFee = big.NewInt(500000000) //Brian Add: 🥸因为跟据EIP1559这个BaseFee会根据网络情况调整，而我们的数据又是采集于某个时刻的所以为了能跑起来这里要跟据数据集情况调整
 	//fmt.Println(header, parent) // Brian Add
 	// fmt.Println(header.Number.Uint64()) //Brian Add
 	if err != nil {
@@ -1413,7 +1441,7 @@ func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *enviro
 	}
 
 	//Brian Add:每个bundle模拟执行一遍，获取MEVGasPrice
-	bundlesToConsider, sbundlesToConsider, err := w.getSimulatedBundles(env)
+	bundlesToConsider, sbundlesToConsider, err := w.getSimulatedBundles(env) //Brian Add: ⭐️需要调用EVM
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -1538,6 +1566,11 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	params.coinbase = w.coinbase
 
 	work, err := w.prepareWork(params)
+	// prefetch_list := prefetch.ReadPrefetchList()                     // Brian Add
+	// fmt.Println("Prefetch_List Size:", len(prefetch_list))           // Brian Add
+	// prefetch.StateDB_Prefetch(work.GetState().Copy(), prefetch_list) // Brian Add: 🥸
+	// fmt.Println("Prefetch Finish!")                                  // Brian Add
+	// time.Sleep(5 * time.Second)                                      // Brian Add
 	//work.state.StopPrefetcher() //Brian Add :尝试关闭statedb的prefetcher看看运行时间有什么不同
 	if err != nil {
 		return &newPayloadResult{err: err}
@@ -1796,6 +1829,11 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 	}
 }
 
+// // Brian Add: public getSealingBlock
+// func (w *worker) GetSealingBlock(params *generateParams) *newPayloadResult {
+// 	return w.getSealingBlock(params)
+// }
+
 // isTTDReached returns the indicator if the given block has reached the total
 // terminal difficulty for The Merge transition.
 func (w *worker) isTTDReached(header *types.Header) bool {
@@ -1908,7 +1946,7 @@ func (w *worker) simulateBundles(env *environment, bundles []types.MevBundle, sb
 				return
 			}
 			gasPool := new(core.GasPool).AddGas(env.header.GasLimit)
-			simmed, err := w.computeBundleGas(env, bundle, state, gasPool, pendingTxs, 0)
+			simmed, err := w.computeBundleGas(env, bundle, state, gasPool, pendingTxs, 0) //Brian Add:⭐️
 
 			if metrics.EnabledBuilder {
 				simulationMeter.Mark(1)

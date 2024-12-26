@@ -120,7 +120,7 @@ func (b *greedyMultiSnapBuilder) buildBlock(simBundles []types.SimulatedBundle, 
 		}
 
 		if orderFailed {
-			if err := changes.env.state.MultiTxSnapshotRevert(); err != nil {
+			if err := changes.env.state.MultiTxSnapshotRevert(); err != nil { //Brian Add: MultiSnapshort的作用是如果orderFailed能回滚状态????
 				log.Error("Failed to revert snapshot", "err", err)
 				return b.inputEnvironment, usedBundles, usedSbundles
 			}

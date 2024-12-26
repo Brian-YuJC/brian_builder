@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
@@ -134,6 +135,12 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 // provided node information. No error will be returned if the node is not found.
 func (dl *diffLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	return dl.node(owner, path, hash, 0)
+}
+
+// Brian Add:🥸 我们给Reader接口添加了NodeWithLog所以这里也更新一下防止报错
+// TODO:这里暂时只是为了满足Reader接口而定义，后续有需要可以补充
+func (dl *diffLayer) NodeWithLog(owner common.Hash, path []byte, hash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	return nil, nil
 }
 
 // update implements the layer interface, creating a new layer on top of the

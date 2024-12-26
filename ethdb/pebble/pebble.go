@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/prefetch"
 )
 
 const (
@@ -296,10 +295,10 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	if d.closed {
 		return nil, pebble.ErrClosed
 	}
-	start_time := time.Now()                         //Brian Add
-	prefetch.LOG.Write(" pebble.go Get()_start", "") //Brian Add
+	//start_time := time.Now() //Brian Add
+	//prefetch.LOG.Write(" pebble.go Get()_start", "") //Brian Add
 	dat, closer, err := d.db.Get(key)
-	prefetch.LOG.Write(" pebble.go Get()_end", time.Since(start_time).Nanoseconds()) //Brian Add
+	//prefetch.LOG.Write(" pebble.go Get()_end", time.Since(start_time).Nanoseconds()) //Brian Add
 	if err != nil {
 		return nil, err
 	}

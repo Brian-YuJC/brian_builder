@@ -262,11 +262,29 @@ type BlockChain struct {
 	vmConfig   vm.Config
 }
 
-// Brian Add
-// blockchain chainConfig Getter
-func (bc *BlockChain) GetChainConfig() *params.ChainConfig {
-	return bc.chainConfig
-}
+// // Brian Add
+// // blockchain chainConfig Getter
+// func (bc *BlockChain) GetChainConfig() *params.ChainConfig {
+// 	return bc.chainConfig
+// }
+
+// // Brian Add
+// // blockchain triedb Getter
+// func (bc *BlockChain) GetTrieDB() *triedb.Database {
+// 	return bc.triedb
+// }
+
+// // Brian Add
+// // stateCache Getter
+// func (bc *BlockChain) GetStateCache() state.Database {
+// 	return bc.stateCache
+// }
+
+// // Brian Add
+// // snaps Getter
+// func (bc *BlockChain) GetSnaps() *snapshot.Tree {
+// 	return bc.snaps
+// }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator
@@ -447,6 +465,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		head := bc.CurrentBlock()
 		if layer := rawdb.ReadSnapshotRecoveryNumber(bc.db); layer != nil && *layer >= head.Number.Uint64() {
 			log.Warn("Enabling snapshot recovery", "chainhead", head.Number, "diskbase", *layer)
+			//fmt.Println("Enabling snapshot recovery", "chainhead", head.Number, "diskbase", *layer) // Brian Add
 			recover = true
 		}
 		snapconfig := snapshot.Config{
@@ -457,7 +476,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		}
 		//-------Brian Add Have Problem------------------------------------------------------------------
 		//变成path以后好像会启动一个什么snapshot的异步加载器导致等待很久
+		//因为snapshot出错需要重建
 		bc.snaps, err = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
+		// fmt.Println("Finish snapshot rebuild") //Brian Add
+		// fmt.Println(err)                       //Brian Add head doesn't match snapshot: have 0xd7f8974fb5ac78d9ac099b9ad5018bedc2ce0a72dad1827a1709da30580f0544, want 0xe61e5ac08c7f0d37a52f52edbf2555b05512dd1a829078db6379296112521f74
+		// fmt.Println("bc.snaps", bc.snaps) // Brian Add
 		//------------------- Brian Add Have Problem---------------------------------------------------
 	}
 
@@ -1354,6 +1377,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 
 // writeBlockWithState writes block, metadata and corresponding state data to the
 // database.
+// Brian Add :⭐️
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) error {
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
@@ -1399,6 +1423,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return nil
 	}
 	// If we exceeded our memory allowance, flush matured singleton nodes to disk
+	// Brian Add: ⭐️
 	var (
 		_, nodes, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
 		limit          = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024

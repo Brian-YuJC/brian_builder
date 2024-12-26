@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"golang.org/x/exp/slices"
@@ -365,6 +366,37 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	return dl.storage(accountHash, storageHash, 0)
 }
 
+// Brian Add: 🥸
+// 带hitrecord 的 Storage方法
+func (dl *diffLayer) StorageWithLog(accountHash, storageHash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	dl.lock.RLock()
+	// Check staleness before reaching further.
+	if dl.Stale() {
+		dl.lock.RUnlock()
+		return nil, ErrSnapshotStale
+	}
+	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
+	if !hit {
+		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
+	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
+	dl.lock.RUnlock()
+
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	if origin != nil {
+		snapshotBloomStorageMissMeter.Mark(1)
+		return origin.StorageWithLog(accountHash, storageHash, hit_record)
+	}
+	// The bloom filter hit, start poking in the internal maps
+	return dl.storageWithLog(accountHash, storageHash, 0, hit_record)
+}
+
 // storage is an internal version of Storage that skips the bloom filter checks
 // and uses the internal maps to try and retrieve the data. It's meant  to be
 // used if a higher layer's bloom filter hit already.
@@ -406,6 +438,51 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 	// Failed to resolve through diff layers, mark a bloom error and use the disk
 	snapshotBloomStorageFalseHitMeter.Mark(1)
 	return dl.parent.Storage(accountHash, storageHash)
+}
+
+// Brian Add: 🥸
+// 带hitrecord 的 storage方法
+func (dl *diffLayer) storageWithLog(accountHash, storageHash common.Hash, depth int, hit_record *metric.HitRecord) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.Stale() {
+		return nil, ErrSnapshotStale
+	}
+	// If the account is known locally, try to resolve the slot locally
+	if storage, ok := dl.storageData[accountHash]; ok {
+		if data, ok := storage[storageHash]; ok {
+			snapshotDirtyStorageHitMeter.Mark(1)
+			snapshotDirtyStorageHitDepthHist.Update(int64(depth))
+			if n := len(data); n > 0 {
+				snapshotDirtyStorageReadMeter.Mark(int64(n))
+			} else {
+				snapshotDirtyStorageInexMeter.Mark(1)
+			}
+			snapshotBloomStorageTrueHitMeter.Mark(1)
+			hit_record.Hit(metric.SNAPSHOT_DIFFLAYER) //Brian Add: 🥸
+			return data, nil
+		}
+	}
+	// If the account is known locally, but deleted, return an empty slot
+	if _, ok := dl.destructSet[accountHash]; ok {
+		snapshotDirtyStorageHitMeter.Mark(1)
+		snapshotDirtyStorageHitDepthHist.Update(int64(depth))
+		snapshotDirtyStorageInexMeter.Mark(1)
+		snapshotBloomStorageTrueHitMeter.Mark(1)
+		return nil, nil
+	}
+	// Storage slot unknown to this diff, resolve from parent
+	if diff, ok := dl.parent.(*diffLayer); ok {
+		hit_record.Hit(metric.SNAPSHOT_PARENT_DIFFLAYER) //Brian Add: 🥸
+		return diff.storageWithLog(accountHash, storageHash, depth+1, hit_record)
+	}
+	// Failed to resolve through diff layers, mark a bloom error and use the disk
+	snapshotBloomStorageFalseHitMeter.Mark(1)
+	hit_record.Hit(metric.SNAPSHOT_BLOOM_ERROR) //Brian Add: 🥸
+	return dl.parent.StorageWithLog(accountHash, storageHash, hit_record)
 }
 
 // Update creates a new layer on top of the existing snapshot diff tree with

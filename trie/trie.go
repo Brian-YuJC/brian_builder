@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
@@ -153,6 +154,19 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 	return value, err
 }
 
+// Brian Add: 🥸
+func (t *Trie) GetWithLog(key []byte, hit_record *metric.HitRecord) ([]byte, error) {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return nil, ErrCommitted
+	}
+	value, newroot, didResolve, err := t.getWithLog(t.root, keybytesToHex(key), 0, hit_record)
+	if err == nil && didResolve {
+		t.root = newroot
+	}
+	return value, err
+}
+
 func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	switch n := (origNode).(type) {
 	case nil:
@@ -183,6 +197,48 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 			return nil, n, true, err
 		}
 		value, newnode, _, err := t.get(child, key, pos)
+		return value, newnode, true, err
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
+}
+
+// Brian Add: 🥸
+func (t *Trie) getWithLog(origNode node, key []byte, pos int, hit_record *metric.HitRecord) (value []byte, newnode node, didResolve bool, err error) {
+	switch n := (origNode).(type) {
+	case nil:
+		hit_record.Hit(metric.ERROR) //Brian Add: 🥸
+		return nil, nil, false, nil
+	case valueNode:
+		hit_record.Hit(metric.TRIE_VALUENODE) //Brian Add: 🥸
+		return n, n, false, nil
+	case *shortNode:
+		hit_record.Hit(metric.TRIE_SHORTNODE) //Brian Add: 🥸
+		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+			// key not found in trie
+			return nil, n, false, nil
+		}
+		value, newnode, didResolve, err = t.getWithLog(n.Val, key, pos+len(n.Key), hit_record)
+		if err == nil && didResolve {
+			n = n.copy()
+			n.Val = newnode
+		}
+		return value, n, didResolve, err
+	case *fullNode:
+		hit_record.Hit(metric.TRIE_FULLNODE) //Brian Add: 🥸
+		value, newnode, didResolve, err = t.getWithLog(n.Children[key[pos]], key, pos+1, hit_record)
+		if err == nil && didResolve {
+			n = n.copy()
+			n.Children[key[pos]] = newnode
+		}
+		return value, n, didResolve, err
+	case hashNode:
+		hit_record.Hit(metric.TRIE_HASHNODE)                             //Brian Add: 🥸
+		child, err := t.resolveAndTrackWithLog(n, key[:pos], hit_record) //Brian Add ⭐️ Need to get from low-level db
+		if err != nil {
+			return nil, n, true, err
+		}
+		value, newnode, _, err := t.getWithLog(child, key, pos, hit_record)
 		return value, newnode, true, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
@@ -586,7 +642,17 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 // node's original value. The rlp-encoded blob is preferred to be loaded from
 // database because it's easy to decode node while complex to encode node to blob.
 func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
-	blob, err := t.reader.node(prefix, common.BytesToHash(n))
+	blob, err := t.reader.node(prefix, common.BytesToHash(n)) //Brian Add: Read from hashdb or pathdb
+	if err != nil {
+		return nil, err
+	}
+	t.tracer.onRead(prefix, blob)
+	return mustDecodeNode(n, blob), nil
+}
+
+// Brian Add: 🥸
+func (t *Trie) resolveAndTrackWithLog(n hashNode, prefix []byte, hit_record *metric.HitRecord) (node, error) {
+	blob, err := t.reader.nodeWithLog(prefix, common.BytesToHash(n), hit_record) //Brian Add: Read from hashdb or pathdb
 	if err != nil {
 		return nil, err
 	}

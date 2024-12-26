@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -166,6 +167,48 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	} else {
 		snapshotCleanStorageInexMeter.Mark(1)
 	}
+	return blob, nil
+}
+
+// Brian Add: 🥸
+// 带Log的Storage方法
+func (dl *diskLayer) StorageWithLog(accountHash, storageHash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.stale {
+		return nil, ErrSnapshotStale
+	}
+	key := append(accountHash[:], storageHash[:]...)
+
+	// If the layer is being generated, ensure the requested hash has already been
+	// covered by the generator.
+	if dl.genMarker != nil && bytes.Compare(key, dl.genMarker) > 0 {
+		return nil, ErrNotCoveredYet
+	}
+	// If we're in the disk layer, all diff layers missed
+	snapshotDirtyStorageMissMeter.Mark(1)
+
+	// Try to retrieve the storage slot from the memory cache
+	if blob, found := dl.cache.HasGet(nil, key); found {
+		snapshotCleanStorageHitMeter.Mark(1)
+		snapshotCleanStorageReadMeter.Mark(int64(len(blob)))
+		hit_record.Hit(metric.SNAPSHOT_DISKLAYER_CACHE) //Brian Add: 🥸
+		return blob, nil
+	}
+	// Cache doesn't contain storage slot, pull from disk and cache for later
+	blob := rawdb.ReadStorageSnapshot(dl.diskdb, accountHash, storageHash)
+	dl.cache.Set(key, blob)
+
+	snapshotCleanStorageMissMeter.Mark(1)
+	if n := len(blob); n > 0 {
+		snapshotCleanStorageWriteMeter.Mark(int64(n))
+	} else {
+		snapshotCleanStorageInexMeter.Mark(1)
+	}
+	hit_record.Hit(metric.SNAPSHOT_DISKLAYER_DISK) //Brian Add: 🥸
 	return blob, nil
 }
 

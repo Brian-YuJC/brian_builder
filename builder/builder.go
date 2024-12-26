@@ -433,6 +433,11 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 	// 2. Submission goroutine waits for queueSignal and submits queueBest* if its more valuable than
 	//    queueLastSubmittedProfit keeping queueLastSubmittedProfit to be the profit of the last submission.
 	//    Submission goroutine is globally rate limited to have fixed rate of submissions for all jobs.
+	// Brian Add:
+	// 	给定负载属性的提交队列对于给定的任务槽，可以运行针对不同属性的多个作业
+	// 1.  当新块准备好时，我们检查它的利润是否高于上一个最佳块的利润。如果是，我们将queueBest*设置为新块的值，并通知队列信号通道。
+	// 2.  提交goroutine等待queueSignal并提交queueBest*，如果它比queueLastSubmittedProfit更有价值，
+	//     则保持queueLastSubmittedProfit为上次提交的利润。提交goroutine是全球速率限制的，所有工作都有固定的提交速率。
 	var (
 		queueSignal = make(chan struct{}, 1)
 
@@ -510,6 +515,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 	}
 
 	// resubmits block builder requests every builderBlockResubmitInterval
+	// Brian Add: builderBlockResubmitInterval -> BlockResubmitIntervalDefault = 500 * time.Millisecond
 	runRetryLoop(ctx, b.builderResubmitInterval, func() {
 		log.Debug("retrying BuildBlock",
 			"slot", attrs.Slot,

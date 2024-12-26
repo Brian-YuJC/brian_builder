@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 	"golang.org/x/crypto/sha3"
@@ -157,6 +158,12 @@ func (dl *diskLayer) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 		cleanWriteMeter.Mark(int64(len(nBlob)))
 	}
 	return nBlob, nil
+}
+
+// Brian Add:🥸 我们给Reader接口添加了NodeWithLog所以这里也更新一下防止报错
+// TODO:这里暂时只是为了满足Reader接口而定义，后续有需要可以补充
+func (dl *diskLayer) NodeWithLog(owner common.Hash, path []byte, hash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	return nil, nil
 }
 
 // update implements the layer interface, returning a new diff layer on top

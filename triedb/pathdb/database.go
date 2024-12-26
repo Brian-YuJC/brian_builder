@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
@@ -82,6 +83,10 @@ type layer interface {
 	// This is meant to be used during shutdown to persist the layer without
 	// flattening everything down (bad for reorgs).
 	journal(w io.Writer) error
+
+	//Brian Add: 🥸
+	// 为了监测命中率而设置的
+	NodeWithLog(owner common.Hash, path []byte, hash common.Hash, hit_record *metric.HitRecord) ([]byte, error)
 }
 
 // Config contains the settings for database.

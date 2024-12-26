@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
@@ -67,6 +68,24 @@ func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path}
 	}
 	blob, err := r.reader.Node(r.owner, path, hash)
+	if err != nil || len(blob) == 0 {
+		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path, err: err}
+	}
+	return blob, nil
+}
+
+// Brian Add: 🥸
+func (r *trieReader) nodeWithLog(path []byte, hash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	// Perform the logics in tests for preventing trie node access.
+	if r.banned != nil {
+		if _, ok := r.banned[string(path)]; ok {
+			return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path}
+		}
+	}
+	if r.reader == nil {
+		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path}
+	}
+	blob, err := r.reader.NodeWithLog(r.owner, path, hash, hit_record)
 	if err != nil || len(blob) == 0 {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path, err: err}
 	}

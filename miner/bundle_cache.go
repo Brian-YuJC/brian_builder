@@ -32,7 +32,7 @@ func (b *BundleCache) GetBundleCache(header common.Hash) *BundleCacheEntry {
 		}
 	}
 	newEntry := newCacheEntry(header)
-	b.entries = b.entries[1:]
+	b.entries = b.entries[1:] //Brian Add: 移除了原entries的第一个元素(所以当header即状态更新时，旧的cache就会被换出？？？)
 	b.entries = append(b.entries, newEntry)
 
 	return newEntry

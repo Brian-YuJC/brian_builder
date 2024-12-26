@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/prefetch"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -82,9 +81,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		//fmt.Fprintln(os.Stderr, tx.Hash()) //Brian Add
-		prefetch.CURRENT_TX = tx.Hash()              //Brian Add
-		prefetch.InvokeTrace("Tx:", tx.Hash().Hex()) // Brian Add
+		// fmt.Println(tx.Hash()) //Brian Add
+		//prefetch.CURRENT_TX = tx.Hash()              //Brian Add
+		//prefetch.InvokeTrace("Tx:", tx.Hash().Hex()) // Brian Add
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
@@ -115,7 +114,9 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 
 	snapshot := statedb.Snapshot()
 	// Apply the transaction to the current state (included in the env).
+	//start := time.Now() //Brian Add
 	result, err := ApplyMessage(evm, msg, gp)
+	//fmt.Println("Run time", msg.From, time.Since(start)) //Brian Add
 	if err != nil {
 		//fmt.Println("ApplyMessage err:", err) // Brian Add :这里报了Nonce Error
 		return nil, err

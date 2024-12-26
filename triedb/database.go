@@ -88,6 +88,12 @@ type Database struct {
 	backend   backend        // The backend for managing trie nodes
 }
 
+// Brian Add:
+// Database backend getter
+func (db *Database) GetBackend() backend {
+	return db.backend
+}
+
 // NewDatabase initializes the trie database with default settings, note
 // the legacy hash-based scheme is used by default.
 func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
@@ -172,6 +178,18 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 	}
 	return diffs, nodes, preimages
 }
+
+// // Brian Add
+// // 实现prefetch.Storage 接口的 GetSize() common.StorageSize 方法
+// func (db *Database) GetSize() map[string]common.StorageSize {
+// 	diffs, nodes, preimages := db.Size() //封装原生的Size接口
+// 	size_map := make(map[string]common.StorageSize)
+// 	size_map["triedb.diffs"] = diffs
+// 	size_map["triedb.nodes"] = nodes
+// 	size_map["triedb.preimages"] = preimages
+// 	size_map["triedb.all"] = diffs + nodes + preimages
+// 	return size_map
+// }
 
 // Initialized returns an indicator if the state data is already initialized
 // according to the state scheme.

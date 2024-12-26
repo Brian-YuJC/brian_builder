@@ -136,8 +136,9 @@ func newSBundleWithMinerFee(sbundle *types.SimSBundle) (*txWithMinerFee, error) 
 // Returns error in case of a negative effective miner gasTipCap.
 func newTxWithMinerFee(tx *txpool.LazyTransaction, from common.Address, baseFee *uint256.Int) (*txWithMinerFee, error) {
 	tip := new(uint256.Int).Set(tx.GasTipCap)
-	if baseFee != nil {
+	if baseFee != nil { // Brian Add: 计算effective miner gasTipCap (effective miner gasTipCap <= miner gasTipCap)
 		if tx.GasFeeCap.Cmp(baseFee) < 0 {
+			//fmt.Println("tx.GasFeeCap", tx.GasFeeCap, "baseFee", baseFee) //Brian Add
 			return nil, types.ErrGasFeeCapTooLow
 		}
 		tip = new(uint256.Int).Sub(tx.GasFeeCap, baseFee)
@@ -232,7 +233,7 @@ func newTransactionsByPriceAndNonce(signer types.Signer, txs map[common.Address]
 	for from, accTxs := range txs {
 		wrapped, err := newTxWithMinerFee(accTxs[0], from, baseFeeUint)
 		if err != nil {
-			//fmt.Println(err) // Brian Add
+			//fmt.Println(err) // Brian Add TODO 这里报错fee cap less than base fee！！
 			delete(txs, from)
 			continue
 		}

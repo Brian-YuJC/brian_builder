@@ -58,17 +58,17 @@ func (b *greedyBuilder) mergeOrdersIntoEnvDiff(
 		if laxyTx := order.Tx(); laxyTx != nil { //Brian Add: 如果是txpool中的普通pendingTx
 			//fmt.Println("is Tx") // Brian Add
 			tx := laxyTx.Resolve()
-			if tx == nil {
+			if tx == nil { //Brian Add: tx被驱逐
 				log.Trace("Ignoring evicted transaction", "hash", laxyTx.Hash)
 				orders.Pop()
 				continue
 			}
-			receipt, skip, err := envDiff.commitTx(tx, b.chainData) //
+			receipt, skip, err := envDiff.commitTx(tx, b.chainData) //Brian Add: ⭐️需要调用EVM
 			switch skip {
 			case shiftTx:
 				orders.Shift()
 			case popTx:
-				orders.Pop()
+				orders.Pop() //Brian Add:只是从当前orders序列中被pop掉，依然在txpool中
 			}
 
 			if err != nil {
@@ -85,7 +85,7 @@ func (b *greedyBuilder) mergeOrdersIntoEnvDiff(
 			}
 		} else if bundle := order.Bundle(); bundle != nil {
 			// log.Debug("buildBlock considering bundle", "egp", bundle.MevGasPrice.String(), "hash", bundle.OriginalBundle.Hash)
-			err := envDiff.commitBundle(bundle, b.chainData, b.interrupt, b.algoConf)
+			err := envDiff.commitBundle(bundle, b.chainData, b.interrupt, b.algoConf) //Brian Add: ⭐️需要调用EVM
 			orders.Pop()
 			if err != nil {
 				log.Trace("Could not apply bundle", "bundle", bundle.OriginalBundle.Hash, "err", err)

@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/prefetch"
 	"github.com/holiman/uint256"
 )
 
@@ -239,10 +238,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
 			//prefetch.TOUCH_ADDR_CH <- prefetch.TouchLog{WhichTx: prefetch.CURRENT_TX, Address: addr} //Brian Add 返回
-			prefetch.InvokeTrace("Calling address:", caller.Address().Hex()) //Brian Add Test
-			prefetch.InvokeTrace("Called address:", addr)                    //Brian Add Test
+			//prefetch.InvokeTrace("Calling address:", caller.Address().Hex()) //Brian Add Test
+			//prefetch.InvokeTrace("Called address:", addr)                    //Brian Add Test
 			ret, err = evm.interpreter.Run(contract, input, false)
-			prefetch.InvokeTrace("Return address:", caller.Address().Hex()) //Brian Add Test
+			//prefetch.InvokeTrace("Return address:", caller.Address().Hex()) //Brian Add Test
 			gas = contract.Gas
 		}
 	}

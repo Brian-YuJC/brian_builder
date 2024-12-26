@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
@@ -52,6 +53,12 @@ func (r *testReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]b
 	}
 	// Check the node presence in database.
 	return rawdb.ReadTrieNode(r.db, owner, path, hash, r.scheme), nil
+}
+
+// Brian Add:🥸 我们给Reader接口添加了NodeWithLog所以这里也更新一下防止报错
+// TODO:这里暂时只是为了满足Reader接口而定义，后续有需要可以补充
+func (r *testReader) NodeWithLog(owner common.Hash, path []byte, hash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	return nil, nil
 }
 
 // testDb implements database.Database interface, using for testing purpose.

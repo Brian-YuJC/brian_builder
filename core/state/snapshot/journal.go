@@ -138,7 +138,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
-	snapshot, generator, err := loadAndParseJournal(diskdb, base)
+	snapshot, generator, err := loadAndParseJournal(diskdb, base) //Brian Add: 如果difflayer为空（没有journal）或者不是以base开始的则snapshot=base
 	if err != nil {
 		log.Warn("Failed to load journal", "error", err)
 		return nil, false, err
@@ -181,7 +181,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 		if len(generator.Marker) >= 8 {
 			origin = binary.BigEndian.Uint64(generator.Marker)
 		}
-		go base.generate(&generatorStats{
+		go base.generate(&generatorStats{ //⭐️Brian Add: 这里应该就是generate一个新的disklayer
 			origin:   origin,
 			start:    time.Now(),
 			accounts: generator.Accounts,

@@ -234,6 +234,7 @@ func estimatePayoutTxGas(env *environment, sender, receiver common.Address, prv 
 }
 
 func applyPayoutTx(envDiff *environmentDiff, sender, receiver common.Address, gas uint64, amountWithFees *big.Int, prv *ecdsa.PrivateKey, chData chainData) (*types.Receipt, error) {
+	//Brian Add: envDiff.header.BaseFee为空会导致报invalid memory address or nil pointer dereference
 	amount := new(big.Int).Sub(amountWithFees, new(big.Int).Mul(envDiff.header.BaseFee, big.NewInt(int64(gas))))
 
 	if amount.Sign() < 0 {

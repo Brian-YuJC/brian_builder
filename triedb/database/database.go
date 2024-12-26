@@ -18,6 +18,7 @@ package database
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 )
 
 // Reader wraps the Node method of a backing trie reader.
@@ -26,6 +27,9 @@ type Reader interface {
 	// node path and the corresponding node hash. No error will be returned
 	// if the node is not found.
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
+
+	//Brian Add:🥸 为了记录命中率
+	NodeWithLog(owner common.Hash, path []byte, hash common.Hash, hit_record *metric.HitRecord) ([]byte, error)
 }
 
 // PreimageStore wraps the methods of a backing store for reading and writing

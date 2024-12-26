@@ -287,6 +287,7 @@ func (b *BeaconClient) SubscribeToPayloadAttributesEvents(payloadAttrC chan type
 			err := json.Unmarshal(msg.Data, payloadAttributesResp)
 			if err != nil {
 				log.Error("could not unmarshal payload_attributes event", "err", err)
+				//fmt.Println("could not unmarshal payload_attributes event", "err", err) //Brian Add
 			} else {
 				// convert capella.Withdrawal to types.Withdrawal
 				var withdrawals []*types.Withdrawal
@@ -313,9 +314,11 @@ func (b *BeaconClient) SubscribeToPayloadAttributesEvents(payloadAttrC chan type
 		})
 		if err != nil {
 			log.Error("failed to subscribe to payload_attributes events", "err", err)
+			//fmt.Println("failed to subscribe to payload_attributes events", "err", err) //Brian Add
 			time.Sleep(1 * time.Second)
 		}
 		log.Warn("beaconclient SubscribeRaw ended, reconnecting")
+		//fmt.Println("beaconclient SubscribeRaw ended, reconnecting") //Brian Add
 	}
 }
 

@@ -215,7 +215,7 @@ func (envDiff *environmentDiff) commitBundle(bundle *types.SimulatedBundle, chDa
 			return errInterrupt
 		}
 
-		receipt, _, err := tmpEnvDiff.commitTx(tx, chData)
+		receipt, _, err := tmpEnvDiff.commitTx(tx, chData) //Brian Add: ⭐️需要调用EVM
 		if err != nil {
 			isRevertibleTx := bundle.OriginalBundle.RevertingHash(txHash)
 			// if drop enabled, and revertible tx has error on commit, we skip the transaction and continue with next one

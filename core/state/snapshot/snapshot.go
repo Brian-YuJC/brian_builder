@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -112,6 +113,10 @@ type Snapshot interface {
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account.
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
+
+	//Brian Add: 🥸
+	//带Log的Storage方法
+	StorageWithLog(accountHash, storageHash common.Hash, hit_record *metric.HitRecord) ([]byte, error)
 }
 
 // snapshot is the internal version of the snapshot data layer that supports some
@@ -176,6 +181,12 @@ type Tree struct {
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
 }
 
+// Brian Add
+// layers Getter
+func (t *Tree) GetLayers() map[common.Hash]snapshot {
+	return t.layers
+}
+
 // New attempts to load an already existing snapshot from a persistent key-value
 // store (with a number of memory layers from a journal), ensuring that the head
 // of the snapshot matches the expected one.
@@ -201,6 +212,7 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 		layers: make(map[common.Hash]snapshot),
 	}
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
+	// Brian Add：这里的head可能是disklayer也可能是difflayer
 	head, disabled, err := loadSnapshot(diskdb, triedb, root, config.CacheSize, config.Recovery, config.NoBuild)
 	if disabled {
 		log.Warn("Snapshot maintenance disabled (syncing)")

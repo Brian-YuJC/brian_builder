@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
@@ -103,6 +104,8 @@ type Database struct {
 	childrenSize common.StorageSize // Storage size of the external children tracking
 
 	lock sync.RWMutex
+
+	//cleansSize common.StorageSize //Brian Add: 🥸监测clean内存的大小
 }
 
 // cachedNode is all the information we know about a single cached trie node
@@ -213,12 +216,69 @@ func (db *Database) node(hash common.Hash) ([]byte, error) {
 	if len(enc) != 0 {
 		if db.cleans != nil {
 			db.cleans.Set(hash[:], enc) //Brian Add ⭐️
+			//db.cleansSize += common.StorageSize(64 * 1024) //Brian Add:🥸这里对cleans进行添加操作，维护cleansSize
 			memcacheCleanMissMeter.Mark(1)
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
 		}
 		return enc, nil
 	}
 	return nil, errors.New("not found")
+}
+
+// Brian Add: 🥸
+// node retrieves an encoded cached trie node from memory. If it cannot be found
+// cached, the method queries the persistent database for the content.
+func (db *Database) nodeWithLog(hash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	// It doesn't make sense to retrieve the metaroot
+	if hash == (common.Hash{}) {
+		return nil, errors.New("not found")
+	}
+	// Retrieve the node from the clean cache if available //Brian Add ⭐️
+	if db.cleans != nil {
+		if enc := db.cleans.Get(nil, hash[:]); enc != nil {
+			memcacheCleanHitMeter.Mark(1)
+			memcacheCleanReadMeter.Mark(int64(len(enc)))
+			hit_record.Hit(metric.HASHDB_CLEANS) //Brian Add: 🥸
+			return enc, nil
+		}
+	}
+	// Retrieve the node from the dirty cache if available. //Brian Add ⭐️
+	db.lock.RLock()
+	dirty := db.dirties[hash]
+	db.lock.RUnlock()
+
+	// Return the cached node if it's found in the dirty set.
+	// The dirty.node field is immutable and safe to read it
+	// even without lock guard.
+	if dirty != nil {
+		memcacheDirtyHitMeter.Mark(1)
+		memcacheDirtyReadMeter.Mark(int64(len(dirty.node)))
+		hit_record.Hit(metric.HASHDB_DIRTIES) //Brian Add: 🥸
+		return dirty.node, nil
+	}
+	memcacheDirtyMissMeter.Mark(1)
+
+	// Content unavailable in memory, attempt to retrieve from disk //Brian Add ⭐️
+	enc := rawdb.ReadLegacyTrieNode(db.diskdb, hash)
+	if len(enc) != 0 {
+		if db.cleans != nil {
+			db.cleans.Set(hash[:], enc) //Brian Add ⭐️
+			//db.cleansSize += common.StorageSize(64 * 1024) //Brian Add:🥸这里对cleans进行添加操作，维护cleansSize
+			memcacheCleanMissMeter.Mark(1)
+			memcacheCleanWriteMeter.Mark(int64(len(enc)))
+		}
+		hit_record.Hit(metric.PEBBLE_DB) //Brian Add: 🥸
+		return enc, nil
+		// Brian Add: 这里返回的enc和存入cleans的enc是否指向同一块内存？
+		// Brian Add: 如果是则Trie和hashdb共用一个内存空间，否则Trie本身也会存储一份节点信息
+	}
+	return nil, errors.New("not found")
+}
+
+// Brian Add: 🥸
+// Public the node() function
+func (db *Database) Node(hash common.Hash) ([]byte, error) {
+	return db.node(hash)
 }
 
 // Reference adds a new reference from a parent node to a child node.
@@ -399,6 +459,10 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
 		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
+	//Brian Add
+	// fmt.Println("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
+	// 	"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+
 	return nil
 }
 
@@ -531,6 +595,7 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if c.db.cleans != nil {
 		c.db.cleans.Set(hash[:], rlp)
+		//c.db.cleansSize += common.StorageSize(64 * 1024) //Brian Add:🥸这里对cleans进行添加操作，维护cleansSize
 		memcacheCleanWriteMeter.Mark(int64(len(rlp)))
 	}
 	return nil
@@ -615,10 +680,23 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	return 0, db.dirtiesSize + db.childrenSize + metadataSize
 }
 
+// // Brian Add: 🥸
+// // 实现prefetch.Storage 接口的 GetSize() common.StorageSize 方法
+// func (db *Database) GetSize() map[string]common.StorageSize {
+// 	size_map := make(map[string]common.StorageSize)
+// 	size_map["hashdb.dirtiesSize"] = db.dirtiesSize
+// 	size_map["hashdb.childrenSize"] = db.childrenSize
+// 	size_map["hashdb.metadataSize"] = common.StorageSize(len(db.dirties) * cachedNodeSize)
+// 	size_map["hashdb.cleansSize"] = db.cleansSize
+// 	size_map["hashdb.all"] = db.dirtiesSize + db.childrenSize + size_map["hashdb.metadataSize"] + db.cleansSize
+// 	return size_map
+// }
+
 // Close closes the trie database and releases all held resources.
 func (db *Database) Close() error {
 	if db.cleans != nil {
 		db.cleans.Reset()
+		//db.cleansSize = common.StorageSize(0) //Brian Add:🥸这里对cleans进行重置操作，维护cleansSize
 		db.cleans = nil
 	}
 	return nil
@@ -647,5 +725,11 @@ type reader struct {
 // returned if the node is not found.
 func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	blob, _ := reader.db.node(hash)
+	return blob, nil
+}
+
+// Brian Add: 🥸
+func (reader *reader) NodeWithLog(owner common.Hash, path []byte, hash common.Hash, hit_record *metric.HitRecord) ([]byte, error) {
+	blob, _ := reader.db.nodeWithLog(hash, hit_record)
 	return blob, nil
 }

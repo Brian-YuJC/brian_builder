@@ -26,8 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/prefetch"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
@@ -165,22 +166,36 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 	// If we have a dirty value for this state entry, return it
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
-		prefetch.LOG.Write("Dirty", "") //Brian Add
+		//prefetch.LOG.Write("Dirty", "") //Brian Add
 		return value
 	}
 	// Otherwise return the entry's original value
 	return s.GetCommittedState(key)
 }
 
+// Brian Add: 🥸
+// 添加带命中率采集的函数
+func (s *stateObject) GetStateWithLog(key common.Hash, hit_record *metric.HitRecord) common.Hash {
+	// If we have a dirty value for this state entry, return it
+	value, dirty := s.dirtyStorage[key]
+	if dirty {
+		//prefetch.LOG.Write("Dirty", "") //Brian Add
+		hit_record.Hit(metric.STATEDB_DIRTY) // Brian Add: 🥸
+		return value
+	}
+	// Otherwise return the entry's original value
+	return s.GetCommittedStateWithLog(key, hit_record)
+}
+
 // GetCommittedState retrieves a value from the committed account storage trie.
 func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	// If we have a pending write or clean cached, return that
 	if value, pending := s.pendingStorage[key]; pending {
-		prefetch.LOG.Write("Pending", "") //Brian Add
+		//prefetch.LOG.Write("Pending", "") //Brian Add
 		return value
 	}
 	if value, cached := s.originStorage[key]; cached {
-		prefetch.LOG.Write("Origin", "") //Brian Add
+		//prefetch.LOG.Write("Origin", "") //Brian Add
 		return value
 	}
 	// If the object was destructed in *this* block (and potentially resurrected),
@@ -190,7 +205,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	//      have been handles via pendingStorage above.
 	//   2) we don't have new values, and can deliver empty response back
 	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
-		prefetch.LOG.Write("Destruct", "") //Brian Add
+		//prefetch.LOG.Write("Destruct", "") //Brian Add
 		return common.Hash{}
 	}
 	// If no live objects are available, attempt to use snapshots
@@ -211,7 +226,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 				s.db.setError(err)
 			}
 			value.SetBytes(content)
-			prefetch.LOG.Write("Snapshot", "") //Brian Add
+			//prefetch.LOG.Write("Snapshot", "") //Brian Add
 		}
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
@@ -233,7 +248,75 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		value.SetBytes(val)
 	}
 	s.originStorage[key] = value
-	prefetch.LOG.Write("Trie", "") //Brian Add
+	//prefetch.LOG.Write("Trie", "") //Brian Add
+	return value
+}
+
+// Brian Add: 🥸
+// 带hitrecord 的 GetCommittedState方法
+// GetCommittedState retrieves a value from the committed account storage trie.
+func (s *stateObject) GetCommittedStateWithLog(key common.Hash, hit_record *metric.HitRecord) common.Hash {
+	// If we have a pending write or clean cached, return that
+	if value, pending := s.pendingStorage[key]; pending {
+		hit_record.Hit(metric.STATEDB_PENDING) // Brian Add: 🥸
+		return value
+	}
+	if value, cached := s.originStorage[key]; cached {
+		hit_record.Hit(metric.STATEDB_ORIGION) // Brian Add: 🥸
+		return value
+	}
+	// If the object was destructed in *this* block (and potentially resurrected),
+	// the storage has been cleared out, and we should *not* consult the previous
+	// database about any storage values. The only possible alternatives are:
+	//   1) resurrect happened, and new slot values were set -- those should
+	//      have been handles via pendingStorage above.
+	//   2) we don't have new values, and can deliver empty response back
+	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
+		hit_record.Hit(metric.STATEDB_DESTRUCT) // Brian Add: 🥸
+		return common.Hash{}
+	}
+	// If no live objects are available, attempt to use snapshots
+	var (
+		enc   []byte
+		err   error
+		value common.Hash
+	)
+	if s.db.snap != nil {
+		start := time.Now()
+		enc, err = s.db.snap.StorageWithLog(s.addrHash, crypto.Keccak256Hash(key.Bytes()), hit_record)
+		if metrics.EnabledExpensive {
+			s.db.SnapshotStorageReads += time.Since(start)
+		}
+		if len(enc) > 0 {
+			_, content, _, err := rlp.Split(enc)
+			if err != nil {
+				s.db.setError(err)
+			}
+			value.SetBytes(content)
+			if err == nil { // Brian Add: 🥸
+				hit_record.Hit(metric.STATEDB_SNAPSHOT)
+			}
+		}
+	}
+	//If the snapshot is unavailable or reading from it fails, load from the database.
+	if s.db.snap == nil || err != nil {
+		start := time.Now()
+		tr, err := s.getTrie()
+		if err != nil {
+			s.db.setError(err)
+			return common.Hash{}
+		}
+		val, err := tr.(*trie.StateTrie).GetStorageWithLog(s.address, key.Bytes(), hit_record)
+		if metrics.EnabledExpensive {
+			s.db.StorageReads += time.Since(start)
+		}
+		if err != nil {
+			s.db.setError(err)
+			return common.Hash{}
+		}
+		value.SetBytes(val)
+	}
+	s.originStorage[key] = value
 	return value
 }
 

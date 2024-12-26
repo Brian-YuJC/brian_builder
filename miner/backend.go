@@ -120,7 +120,7 @@ func (b *SimulatedBackend) Close() error {
 
 // Commit imports all the pending transactions as a single block and starts a
 // fresh new state.
-func (b *SimulatedBackend) Commit() common.Hash {
+func (b *SimulatedBackend) Commit() common.Hash { // Brian Add: ⭐️
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

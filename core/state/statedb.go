@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/prefetch"
+	"github.com/ethereum/go-ethereum/prefetch/metric"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
@@ -145,13 +145,51 @@ type StateDB struct {
 }
 
 // Brian Add
+// triedb->hashdb Getter
 func (s *StateDB) GetDB() Database {
 	return s.db
 }
 
 // Brian Add
+// originalRoot Getter
 func (s *StateDB) GetOriginalRoot() common.Hash {
 	return s.originalRoot
+}
+
+// Brian Add
+// trie(state trie) Getter
+func (s *StateDB) GetTrie() Trie {
+	return s.trie
+}
+
+// Brian Add
+// snaps(snapshot) Getter
+func (s *StateDB) GetSnaps() *snapshot.Tree {
+	return s.snaps
+}
+
+// Brian Add
+// snap(Snapshot) Getter
+func (s *StateDB) GetSnap() snapshot.Snapshot {
+	return s.snap
+}
+
+// Brian Add
+// stateObjectsDestruct Getter
+func (s *StateDB) GetStateObjectsDestruct() map[common.Address]*types.StateAccount {
+	return s.stateObjectsDestruct
+}
+
+// Brian Add
+// accounts Getter
+func (s *StateDB) GetAccounts() map[common.Hash][]byte {
+	return s.accounts
+}
+
+// Brian Add
+// storages Getter
+func (s *StateDB) GetStorages() map[common.Hash]map[common.Hash][]byte {
+	return s.storages
 }
 
 // New creates a new state from a given trie.
@@ -184,8 +222,40 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	sdb.multiTxSnapshotStack = NewMultiTxSnapshotStack(sdb)
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
+		//fmt.Println("sdb.snap", sdb.snap)
 	}
 	return sdb, nil
+}
+
+// Brian Add
+// 保留相同statedb执行下一个block，用于执行时
+// 保留关键参数 重置记录
+func CopyKeyParam(s *StateDB, next_root common.Hash) *StateDB {
+	sdb := &StateDB{
+		//保留关键参数
+		db:           s.db,
+		trie:         s.trie,
+		originalRoot: next_root,
+		snaps:        s.snaps,
+		snap:         s.snaps.Snapshot(next_root),
+		//重置记录
+		accounts:             make(map[common.Hash][]byte),
+		storages:             make(map[common.Hash]map[common.Hash][]byte),
+		accountsOrigin:       make(map[common.Address][]byte),
+		storagesOrigin:       make(map[common.Address]map[common.Hash][]byte),
+		stateObjects:         make(map[common.Address]*stateObject),
+		stateObjectsPending:  make(map[common.Address]struct{}),
+		stateObjectsDirty:    make(map[common.Address]struct{}),
+		stateObjectsDestruct: make(map[common.Address]*types.StateAccount),
+		logs:                 make(map[common.Hash][]*types.Log),
+		preimages:            make(map[common.Hash][]byte),
+		journal:              newJournal(),
+		accessList:           newAccessList(),
+		transientStorage:     newTransientStorage(),
+		hasher:               crypto.NewKeccakState(),
+	}
+	sdb.multiTxSnapshotStack = NewMultiTxSnapshotStack(sdb)
+	return sdb
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -360,13 +430,22 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	//prefetch.LOG.Write("   getStateObject_end", time.Now()) //Brian Add
 
 	if stateObject != nil {
-		prefetch.LOG.Write("   State", "getStateObject success")     //Brian Add
-		prefetch.LOG.Write("stateObject.GetState_start", time.Now()) //Brian Add
+		//prefetch.LOG.Write("   State", "getStateObject success")     //Brian Add
+		//prefetch.LOG.Write("stateObject.GetState_start", time.Now()) //Brian Add
 		//defer prefetch.LOG.Write("stateObject.GetState_end", time.Now()) //Brian Add
 		return stateObject.GetState(hash) //获取Account storage的data
 	}
 	//prefetch.LOG.Write("   State", "getStateObject fail") //Brian Add
 
+	return common.Hash{}
+}
+
+// Brian Add
+func (s *StateDB) GetStateWithLog(addr common.Address, hash common.Hash, hit_record *metric.HitRecord) common.Hash {
+	stateObject := s.getStateObject(addr) //Brian Add 获取Account的data
+	if stateObject != nil {
+		return stateObject.GetStateWithLog(hash, hit_record)
+	}
 	return common.Hash{}
 }
 
@@ -888,6 +967,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			delete(s.accountsOrigin, obj.address) // Clear out any previously updated account data (may be recreated via a resurrect)
 			delete(s.storagesOrigin, obj.address) // Clear out any previously updated storage data (may be recreated via a resurrect)
 		} else {
+			//⭐️Brian Add: 这里会进行slot的prefetch
 			obj.finalise(true) // Prefetch slots in the background
 		}
 
@@ -917,7 +997,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
-	s.Finalise(deleteEmptyObjects)
+	s.Finalise(deleteEmptyObjects) //⭐️Brian Add: 这里会生成一个需要Prefetch的列表，然后开始triePrefetch
 
 	// Intermediate root writes updates to the trie, which will cause
 	// in memory multi-transaction snapshot to be incompatible with the committed state, so we invalidate.
@@ -1218,6 +1298,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	}
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
+	//fmt.Println(hash)                              // Brian Add
 
 	// Commit objects to the trie, measuring the elapsed time
 	var (
@@ -1436,6 +1517,12 @@ func (s *StateDB) convertAccountSet(set map[common.Address]*types.StateAccount) 
 		}
 	}
 	return ret
+}
+
+// Brian Add
+// Public convertAccountSet
+func (s *StateDB) ConvertAccountSet(set map[common.Address]*types.StateAccount) map[common.Hash]struct{} {
+	return s.convertAccountSet(set)
 }
 
 func (s *StateDB) NewMultiTxSnapshot() (err error) {
